@@ -19,8 +19,8 @@ type:
 test:
 	uv run pytest
 
-live:  ## one real call to the endpoint in .env
-	BAZAAR_RUN_LIVE=1 uv run pytest -m live
+live:  ## check agent + simulator connections from .env
+	uv run python -m bazaar.bench ping
 
 bench-validate:  ## replay every task's answer key (no LLM calls)
 	uv run python -m bazaar.bench validate

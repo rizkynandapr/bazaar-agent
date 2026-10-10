@@ -27,25 +27,25 @@ Existing agent benchmarks for this kind of work, like [τ-bench](https://github.
 
 ## Quickstart
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/). Works on Windows, macOS and Linux.
 
 ```bash
 git clone https://github.com/rizkynandapr/bazaar-agent.git
 cd bazaar-agent
 uv sync
-make check             # lint, type check, 100+ offline tests (no API key needed)
-make bench-validate    # replay every task's answer key
+uv run pytest                              # 100+ offline tests, no API key needed
+uv run python -m bazaar.bench validate     # replay every task's answer key
 ```
 
 To run the benchmark, copy `.env.example` to `.env` and point it at any OpenAI-compatible endpoint (OpenRouter, Groq, Gemini, a local proxy):
 
 ```bash
-make live              # one real call, to check the connection
-make bench-smoke       # 3 tasks x 1 trial
-make bench             # 20 tasks x 3 trials -> runs/<run-id>/summary.md
+uv run python -m bazaar.bench ping                                  # check agent + simulator connections
+uv run python -m bazaar.bench run --ids T01,T11,T18 --trials 1      # smoke test, 3 tasks
+uv run python -m bazaar.bench run --trials 3                        # full run, 20 tasks x 3 trials
 ```
 
-Each run writes `summary.md`, `summary.json` and `trials.jsonl` (full transcripts with every tool call) to `runs/<run-id>/`.
+Each run writes `summary.md`, `summary.json` and `trials.jsonl` (full transcripts with every tool call) to `runs/<run-id>/`. On macOS/Linux, `make check`, `make bench-smoke` and `make bench` are shortcuts.
 
 ## Repository layout
 
