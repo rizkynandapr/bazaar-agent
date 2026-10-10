@@ -37,3 +37,6 @@ jobs:
 
       - name: Tests (offline)
         run: uv run pytest
+
+      - name: Validate BazaarBench answer keys
+        run: uv run python -m bazaar.bench validate

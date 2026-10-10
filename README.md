@@ -2,7 +2,7 @@
 
 **A production-grade WhatsApp commerce agent for Indonesian SMBs, and BazaarBench, the benchmark that measures it.**
 
-> 🚧 Work in progress. Milestone **M0 (foundation)** is done. Numbers below will be filled in from real BazaarBench runs; nothing here is claimed until it is measured.
+> 🚧 Work in progress. **M0 (foundation)** and **M1 (store + BazaarBench v0, 20 tasks)** are built and tested. The results table is filled only from real BazaarBench runs; nothing here is claimed until it is measured.
 
 ## Why
 
@@ -14,16 +14,16 @@ Existing agent benchmarks for this kind of work, like [τ-bench](https://github.
 
 | | |
 |---|---|
-| **Agent** | Tool-calling loop, retrieval over store policies, human handover, input/output guardrails, model routing |
-| **BazaarBench** | Multi-turn tasks with a simulated customer, graded by final store state + rule checks, pass^k consistency |
-| **Production** | FastAPI service, Docker, per-step tracing with token cost and latency, evals gating every PR in CI |
+| **BazaarBench** | 20 multi-turn tasks across 6 categories with an LLM-simulated Indonesian customer; graded deterministically by final store state + required/forbidden facts; pass^k consistency. [Details →](benchmark/README.md) |
+| **Agent** | Hand-written tool-calling loop over 10 store tools; versioned prompts. Coming: policy retrieval, guardrails, model routing |
+| **Production** *(planned)* | FastAPI service, Docker, per-step tracing with token cost and latency, evals gating every PR in CI |
 
 ## Results
 
-| Configuration | BazaarBench pass^1 | pass^3 | Cost / conversation | p50 latency |
-|---|---|---|---|---|
-| Baseline prompt | — | — | — | — |
-| bazaar-agent | — | — | — | — |
+| Configuration | BazaarBench pass^1 | pass^3 | Tokens / conversation |
+|---|---|---|---|
+| Baseline prompt (`baseline_v0`) | — | — | — |
+| bazaar-agent | — | — | — |
 
 ## Quickstart
 
@@ -33,9 +33,30 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 git clone https://github.com/rizkynandapr/bazaar-agent.git
 cd bazaar-agent
 uv sync
-cp .env.example .env   # add any OpenAI-compatible endpoint + model
-make check             # lint, type check, offline tests
-make live              # one real call to your endpoint
+make check             # lint, type check, 100+ offline tests (no API key needed)
+make bench-validate    # replay every task's answer key
+```
+
+To run the benchmark, copy `.env.example` to `.env` and point it at any OpenAI-compatible endpoint (OpenRouter, Groq, Gemini, a local proxy):
+
+```bash
+make live              # one real call, to check the connection
+make bench-smoke       # 3 tasks x 1 trial
+make bench             # 20 tasks x 3 trials -> runs/<run-id>/summary.md
+```
+
+Each run writes `summary.md`, `summary.json` and `trials.jsonl` (full transcripts with every tool call) to `runs/<run-id>/`.
+
+## Repository layout
+
+```
+src/bazaar/
+  llm/      provider-agnostic LLM client (OpenAI-compatible adapter + scripted fake)
+  store/    fictional store: models, seed data, written policy, tools
+  agent/    agent loop and versioned system prompts
+  bench/    tasks, customer simulator, runner, graders, pass^k, reports, CLI
+benchmark/  BazaarBench task files and datasheet
+docs/       architecture, decision records, roadmap
 ```
 
 ## Design
@@ -50,4 +71,4 @@ All store data, customers and conversations in BazaarBench are synthetic. No rea
 
 ## License
 
-MIT
+Code: MIT. Benchmark task data: CC BY 4.0.

@@ -5,7 +5,7 @@ Each milestone ends in something that runs and can be shown.
 | # | Milestone | Done when | Status |
 |---|---|---|---|
 | M0 | Foundation | Repo, tooling, CI green, LLM layer with offline tests, ADRs 0001–0004 | ✅ |
-| M1 | Store + BazaarBench v0 | Fashion store seed data and tools; task schema; user simulator; state + rule graders; 15–20 tasks; baseline run report | ⏳ |
+| M1 | Store + BazaarBench v0 | Fashion store seed data and tools; task schema; user simulator; state + rule graders; 20 tasks; baseline agent; first baseline run report | ✅ code · ⏳ first run |
 | M2 | Agent v1 | Agent loop, versioned system prompt, policy retrieval, handover, JSONL tracing; first BazaarBench score | |
 | M3 | Iteration | Failure taxonomy from transcripts; guardrails; model routing; score change log (one change per entry) | |
 | M4 | Full benchmark | 40–60 validated tasks; leaderboard of ≥6 models × k=3; datasheet | |

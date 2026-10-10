@@ -63,9 +63,9 @@ A task passes only if the store ends in exactly the expected state **and** every
 |---|---|---|
 | `bazaar.config` | Settings from env; secrets as `SecretStr` | M0 ✅ |
 | `bazaar.llm` | Provider-agnostic `LLMClient`, OpenAI-compatible adapter, `FakeLLM` | M0 ✅ |
-| `bazaar.store` | Fashion store domain model, seed data, tool functions | M1 |
-| `bazaar.bench` | Task schema, user simulator, runner, graders, reports | M1 |
-| `bazaar.agent` | Agent loop, system prompt (versioned), handover | M2 |
+| `bazaar.store` | Fashion store domain model, seed data, policy, tools | M1 ✅ |
+| `bazaar.bench` | Task schema, user simulator, runner, graders, pass^k, reports, CLI | M1 ✅ |
+| `bazaar.agent` | Agent loop ✅ (M1 baseline); versioned prompts, retrieval, tracing | M2 |
 | `bazaar.rag` | Policy documents + BM25 retrieval | M2 |
 | `bazaar.guardrails` | Input/output checks | M3 |
 | `bazaar.routing` | Model routing by difficulty | M3 |
