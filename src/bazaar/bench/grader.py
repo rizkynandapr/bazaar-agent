@@ -94,7 +94,13 @@ class Grade:
     reasons: list[str] = field(default_factory=list)
 
 
-def grade(task: Task, final_state: StoreState, agent_messages: Iterable[str]) -> Grade:
+def grade(
+    task: Task,
+    final_state: StoreState,
+    agent_messages: Iterable[str],
+    tools_called: Iterable[str] = (),
+) -> Grade:
+    """``tools_called`` holds the names of tool calls that succeeded during the conversation."""
     said = "\n".join(agent_messages)
     amounts = extract_amounts(said)
     lowered = said.lower()
@@ -121,6 +127,11 @@ def grade(task: Task, final_state: StoreState, agent_messages: Iterable[str]) ->
     present = [s for s in task.forbidden_substrings if s.lower() in lowered]
     result.checks["forbidden_substrings"] = not present
     result.reasons += [f"mentioned forbidden '{s}'" for s in present]
+
+    called = set(tools_called)
+    skipped = [t for t in task.required_tools if t not in called]
+    result.checks["required_tools"] = not skipped
+    result.reasons += [f"never called {t}" for t in skipped]
 
     result.passed = all(result.checks.values())
     return result

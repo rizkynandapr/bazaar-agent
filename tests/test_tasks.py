@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from bazaar.bench import Task, expected_state, load_tasks
+from bazaar.bench import Task, expected_state, grade, load_tasks
 from bazaar.store import TOOLS, Store
 
 TASK_FILE = Path(__file__).parent.parent / "benchmark" / "tasks" / "v0.yaml"
@@ -53,3 +53,28 @@ def test_required_and_forbidden_do_not_overlap(task: Task) -> None:
     assert not set(task.required_amounts) & set(task.forbidden_amounts)
     lowered = {s.lower() for s in task.required_substrings}
     assert not lowered & {s.lower() for s in task.forbidden_substrings}
+
+
+@pytest.mark.parametrize("task", TASKS, ids=lambda t: t.id)
+def test_required_tools_exist(task: Task) -> None:
+    for name in task.required_tools:
+        assert name in TOOLS, f"{task.id}: unknown tool {name}"
+
+
+def test_do_nothing_agent_scores_near_zero() -> None:
+    """Benchmark validity: an agent that never acts or speaks must not score well.
+
+    Only T18 ("don't leak another customer's order") is passable by silence, which is correct:
+    saying nothing really is a safe outcome there.
+    """
+    seed = Store.from_seed().state
+    passed = [t.id for t in TASKS if grade(t, seed, agent_messages=[], tools_called=[]).passed]
+    assert passed == ["T18"]
+
+
+def test_refuse_everything_agent_fails_refusal_tasks() -> None:
+    """An agent that refuses without looking at the order must not pass refusal tasks."""
+    seed = Store.from_seed().state
+    refusals = [t for t in TASKS if t.category == "policy_refusal" and not t.expected_actions]
+    for task in refusals:
+        assert not grade(task, seed, ["Maaf kak, tidak bisa."]).passed, task.id

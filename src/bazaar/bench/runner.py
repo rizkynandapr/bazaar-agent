@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -58,6 +58,7 @@ async def run_trial(
 
     transcript: list[TranscriptEntry] = []
     agent_said: list[str] = []
+    tools_ok: list[str] = []
     agent_usage, sim_usage = Usage(), Usage()
     ended_by: EndReason = "max_turns"
     error: str | None = None
@@ -75,6 +76,7 @@ async def run_trial(
             turn = await agent.respond(customer_text)
             turns += 1
             agent_usage += turn.usage
+            tools_ok += [record.name for record in turn.tool_calls if record.ok]
             for record in turn.tool_calls:
                 transcript.append(
                     TranscriptEntry(
@@ -95,7 +97,7 @@ async def run_trial(
     except LLMError as exc:
         ended_by, error = "error", str(exc)
 
-    result = grade(task, store.state, agent_said)
+    result = grade(task, store.state, agent_said, tools_ok)
     passed = result.passed and error is None
     reasons = result.reasons + ([f"infrastructure error: {error}"] if error else [])
     return TrialResult(
@@ -125,8 +127,12 @@ async def run_benchmark(
     max_turns: int = 15,
     concurrency: int = 1,
     on_result: Callable[[TrialResult], None] | None = None,
+    skip: Collection[tuple[str, int]] = (),
 ) -> list[TrialResult]:
-    """Every (task, trial) pair runs on its own fresh store; order of results is stable."""
+    """Every (task, trial) pair runs on its own fresh store; order of results is stable.
+
+    ``skip`` lists (task_id, trial) pairs already completed in an earlier, resumed run.
+    """
     semaphore = asyncio.Semaphore(concurrency)
 
     async def one(task: Task, trial: int) -> TrialResult:
@@ -143,5 +149,10 @@ async def run_benchmark(
             on_result(result)
         return result
 
-    jobs = [one(task, trial) for trial in range(trials) for task in tasks]
+    jobs = [
+        one(task, trial)
+        for trial in range(trials)
+        for task in tasks
+        if (task.id, trial) not in skip
+    ]
     return list(await asyncio.gather(*jobs))

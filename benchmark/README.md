@@ -15,6 +15,7 @@ Agent benchmarks for policy-bound customer service, notably [τ-bench](https://g
 5. **Grading is deterministic, with no LLM judge:**
    - The task's `expected_actions` are replayed on a fresh store. The agent passes the state check only if its final store state is identical (free-text fields such as address and name are ignored; stock, items, totals, statuses, returns and handover count are compared).
    - Required amounts (e.g. the order total) must appear in the agent's messages; forbidden amounts or strings (e.g. another customer's order details) must not. Amounts are parsed from Indonesian formats: `Rp259.000`, `259rb`, `259k`, `1,5 jt`.
+   - Required tools must have been called successfully. A refusal only counts if the agent actually looked up the order first (`get_order`); refusing without checking is a guess, not policy compliance.
 
 Reported metric is **pass^k**: the probability that all k independent trials of a task succeed. pass^1 is accuracy; higher k exposes inconsistency.
 
@@ -40,6 +41,17 @@ Reported metric is **pass^k**: the probability that all k independent trials of 
 - required and forbidden checks may not overlap.
 
 Hard business invariants (stock, voucher validity, COD availability, cancellable status) are enforced by the tools. Soft rules (identity verification, the 7-day return window, final sale, acceptable return reasons, when to hand over) are enforced **only by the written policy** (`src/bazaar/store/policies.md`). That gap is what the benchmark measures.
+
+## Validity floor
+
+Two degenerate agents are graded in CI on every change (`tests/test_tasks.py`):
+
+| Degenerate agent | Tasks passed |
+|---|---|
+| Does nothing and says nothing | 1 / 20 (T18, where staying silent genuinely is the safe outcome) |
+| Refuses everything without looking anything up | 0 of the 4 pure-refusal tasks |
+
+Without the `required_tools` check, the do-nothing agent would pass every refusal task. Any reported score should be read against this 5% floor.
 
 ## Known limitations of v0
 

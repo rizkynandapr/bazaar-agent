@@ -42,6 +42,11 @@ class Task(BaseModel):
     forbidden_amounts: list[int] = Field(default_factory=list)
     required_substrings: list[str] = Field(default_factory=list)
     forbidden_substrings: list[str] = Field(default_factory=list)
+    required_tools: list[str] = Field(
+        default_factory=list,
+        description="Tools the agent must call successfully, e.g. get_order before refusing. "
+        "Stops an agent that refuses everything without looking from passing refusal tasks.",
+    )
     notes: str = ""
 
 

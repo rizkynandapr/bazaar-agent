@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import re
 import sys
 from datetime import UTC, datetime
@@ -15,7 +16,9 @@ from bazaar.bench.report import summarize, to_markdown, write_run
 from bazaar.bench.runner import TrialResult, run_benchmark
 from bazaar.bench.task import Task, load_tasks
 from bazaar.config import LLMSettings, SimulatorOverrides, get_llm_settings, simulator_settings
+from bazaar.llm import LLMClient
 from bazaar.llm.openai_compat import OpenAICompatClient
+from bazaar.llm.throttle import ThrottledClient
 
 DEFAULT_TASKS = Path("benchmark/tasks/v0.yaml")
 
@@ -70,50 +73,98 @@ def cmd_ping(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _client(settings: LLMSettings, rpm: float | None) -> LLMClient:
+    client: LLMClient = OpenAICompatClient(settings)
+    return ThrottledClient(client, rpm) if rpm else client
+
+
+def _load_previous(out_dir: Path, meta: dict[str, str]) -> list[TrialResult] | None:
+    """Completed trials of a run being resumed, or None if it belongs to another setup."""
+    saved = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
+    for key in ("agent_model", "simulator_model", "prompt_version", "task_file"):
+        if saved.get(key) != meta[key]:
+            print(f"Cannot resume: {key} was {saved.get(key)!r}, now {meta[key]!r}.")
+            return None
+    trials_file = out_dir / "trials.jsonl"
+    if not trials_file.exists():
+        return []
+    lines = trials_file.read_text(encoding="utf-8").splitlines()
+    results = [TrialResult.model_validate_json(line) for line in lines if line.strip()]
+    return [r for r in results if r.error is None]  # infrastructure errors are retried
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     tasks = _select(load_tasks(args.tasks), args.ids)
     loaded = _load_settings()
     if loaded is None:
         return 2
     agent_settings, sim_settings = loaded
-    agent_llm = OpenAICompatClient(agent_settings)
-    sim_llm = OpenAICompatClient(sim_settings)
+    meta = {
+        "agent_model": agent_settings.model,
+        "simulator_model": sim_settings.model,
+        "prompt_version": args.prompt,
+        "task_file": str(args.tasks),
+    }
 
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", agent_settings.model).strip("-").lower()
-    run_id = f"{stamp}-{slug}"
+    previous: list[TrialResult] = []
+    if args.resume:
+        out_dir = args.resume
+        if not (out_dir / "run.json").exists():
+            print(f"Nothing to resume in {out_dir} (no run.json).")
+            return 2
+        found = _load_previous(out_dir, meta)
+        if found is None:
+            return 2
+        previous = found
+        run_id = out_dir.name
+        print(f"Resuming {run_id}: {len(previous)} trial(s) already done.")
+    else:
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        slug = re.sub(r"[^a-zA-Z0-9]+", "-", agent_settings.model).strip("-").lower()
+        run_id = f"{stamp}-{slug}"
+        out_dir = args.out / run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "run.json").write_text(json.dumps({"run_id": run_id, **meta}, indent=2))
 
-    def progress(r: TrialResult) -> None:
+    trials_file = out_dir / "trials.jsonl"
+    # Rewrite with only the kept trials, then append each new trial the moment it finishes,
+    # so an interrupted run (rate limit, closed laptop, Ctrl+C) loses at most one conversation.
+    trials_file.write_text("".join(r.model_dump_json() + "\n" for r in previous), encoding="utf-8")
+
+    def record(r: TrialResult) -> None:
+        with trials_file.open("a", encoding="utf-8") as fh:
+            fh.write(r.model_dump_json() + "\n")
         mark = "PASS" if r.passed else "FAIL"
         print(f"[{mark}] {r.task_id} trial {r.trial} ({r.ended_by}, {r.turns} turns)", flush=True)
 
-    results = asyncio.run(
-        run_benchmark(
-            tasks,
-            trials=args.trials,
-            agent_llm=agent_llm,
-            simulator_llm=sim_llm,
-            prompt_version=args.prompt,
-            max_turns=args.max_turns,
-            concurrency=args.concurrency,
-            on_result=progress,
+    try:
+        new_results = asyncio.run(
+            run_benchmark(
+                tasks,
+                trials=args.trials,
+                agent_llm=_client(agent_settings, args.rpm),
+                simulator_llm=_client(sim_settings, args.sim_rpm or args.rpm),
+                prompt_version=args.prompt,
+                max_turns=args.max_turns,
+                concurrency=args.concurrency,
+                on_result=record,
+                skip={(r.task_id, r.trial) for r in previous},
+            )
         )
-    )
-    summary = summarize(
-        results,
-        {
-            "run_id": run_id,
-            "agent_model": agent_settings.model,
-            "simulator_model": sim_settings.model,
-            "prompt_version": args.prompt,
-            "task_file": str(args.tasks),
-        },
-    )
-    out_dir = args.out / run_id
+    except KeyboardInterrupt:
+        print(f"\nStopped. Finished trials are saved. Continue with:  --resume {out_dir}")
+        return 130
+
+    results = previous + new_results
+    wanted = {t.id for t in tasks}
+    summary = summarize([r for r in results if r.task_id in wanted], {"run_id": run_id, **meta})
     write_run(out_dir, results, summary)
     print()
     print(to_markdown(summary))
     print(f"Saved to {out_dir}")
+    errors = summary["infrastructure_errors"]
+    if errors:
+        print(f"{errors} trial(s) hit provider errors. Retry just those with:  --resume {out_dir}")
     return 0
 
 
@@ -136,6 +187,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--max-turns", type=int, default=15)
     run.add_argument("--prompt", default="baseline_v0")
     run.add_argument("--out", type=Path, default=Path("runs"))
+    run.add_argument(
+        "--rpm", type=float, help="max requests per minute per model (respect free-tier limits)"
+    )
+    run.add_argument("--sim-rpm", type=float, help="separate request limit for the simulator")
+    run.add_argument("--resume", type=Path, help="continue an interrupted run: runs/<run-id>")
     run.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)

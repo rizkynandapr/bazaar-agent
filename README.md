@@ -45,7 +45,13 @@ uv run python -m bazaar.bench run --ids T01,T11,T18 --trials 1      # smoke test
 uv run python -m bazaar.bench run --trials 3                        # full run, 20 tasks x 3 trials
 ```
 
-Each run writes `summary.md`, `summary.json` and `trials.jsonl` (full transcripts with every tool call) to `runs/<run-id>/`. On macOS/Linux, `make check`, `make bench-smoke` and `make bench` are shortcuts.
+Each run writes `summary.md`, `summary.json` and `trials.jsonl` (full transcripts with every tool call) to `runs/<run-id>/`. Trials are saved as they finish, so long runs on free tiers can be paced and resumed:
+
+```bash
+uv run python -m bazaar.bench run --trials 3 --rpm 10          # at most 10 requests/min per model
+uv run python -m bazaar.bench run --trials 3 --resume runs/<run-id>   # continue after a stop or rate limit
+```
+ On macOS/Linux, `make check`, `make bench-smoke` and `make bench` are shortcuts.
 
 ## Repository layout
 

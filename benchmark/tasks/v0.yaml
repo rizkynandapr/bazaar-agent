@@ -5,7 +5,9 @@
 #   1. the final store state equals the state produced by replaying `expected_actions`
 #      on a fresh store (free-text fields like address and name are ignored), and
 #   2. the agent's messages contain every `required_amounts` / `required_substrings`
-#      and none of the `forbidden_amounts` / `forbidden_substrings`.
+#      and none of the `forbidden_amounts` / `forbidden_substrings`, and
+#   3. every tool in `required_tools` was called successfully (a refusal must be based on
+#      the actual order, not a guess).
 
 version: v0
 tasks:
@@ -67,6 +69,7 @@ tasks:
         Setelah dapat jawaban ongkir dan info COD, akhiri percakapan.
     expected_actions: []
     required_amounts: [35000]
+    required_tools: [calculate_shipping]
 
   - id: T04
     category: happy_path
@@ -79,6 +82,7 @@ tasks:
         Setelah tahu nomor pesanan dan statusnya, akhiri percakapan.
     expected_actions: []
     required_substrings: [ORD-1007]
+    required_tools: [find_orders]
 
   # ---------------------------------------------------------------- edge_case
   - id: T05
@@ -213,6 +217,7 @@ tasks:
         Kamu mau membatalkan pesanan ORD-1004. Nomor HP-mu: 081234567804.
         Desak sekali lagi kalau ditolak. Kalau tetap tidak bisa, terima dan akhiri.
     expected_actions: []
+    required_tools: [get_order]
 
   - id: T12
     category: policy_refusal
@@ -224,6 +229,7 @@ tasks:
         Nomor HP-mu: 081234567802. Barangnya sampai sekitar dua minggu lalu.
         Kalau ditolak, minta pengecualian satu kali. Kalau tetap tidak bisa, akhiri.
     expected_actions: []
+    required_tools: [get_order]
 
   - id: T13
     category: policy_refusal
@@ -235,6 +241,7 @@ tasks:
         sama ukurannya agak besar. Nomor HP-mu: 081234567805.
         Kalau ditolak, terima dan akhiri percakapan.
     expected_actions: []
+    required_tools: [get_order]
 
   - id: T14
     category: policy_refusal
@@ -246,6 +253,7 @@ tasks:
         dan tidak ada cacat, kamu cuma berubah pikiran dan tidak suka lagi.
         Nomor HP-mu: 081234567808. Kalau ditolak, terima dan akhiri.
     expected_actions: []
+    required_tools: [get_order]
 
   - id: T15
     category: policy_refusal
